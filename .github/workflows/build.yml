@@ -1,0 +1,113 @@
+name: Build & Prerelease
+
+# 仅在 Actions 页面手动触发，push 不自动跑。
+on:
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: '创建 prerelease（关闭则只产出 artifact）'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+# 同一时刻只跑一个构建，避免两个发布抢同一个 tag
+concurrency:
+  group: build-prerelease
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: 构建并预发布
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          # wxt 0.21 要求 Node >= 22
+          node-version: 22
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 质量门禁（注释自检 + 类型 + 测试 + 构建 + 产物自检）
+        run: pnpm run check
+
+      - name: 构建 Firefox 并自检
+        run: |
+          pnpm run build:firefox
+          pnpm run verify:build:firefox
+
+      - name: 打包扩展
+        run: |
+          pnpm run zip
+          pnpm run zip:firefox
+
+      - name: 收集产物
+        run: |
+          mkdir -p dist
+          cp .output/*-chrome.zip dist/
+          cp .output/*-firefox.zip dist/
+          cp .output/*-sources.zip dist/
+          ls -lh dist
+
+      - name: 读取版本号
+        id: meta
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}-pre.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: better-zujuan-${{ steps.meta.outputs.version }}-build${{ github.run_number }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: 创建预发布
+        if: ${{ inputs.prerelease }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: v${{ steps.meta.outputs.version }} 预发布 #${{ github.run_number }}
+          prerelease: true
+          draft: false
+          files: dist/*
+          body: |
+            > 🤖 由 GitHub Actions 自动构建的**预发布**版本，用于测试，尚未正式发布。
+
+            ## 安装
+
+            **Chrome / Edge**
+
+            1. 下载 `better-zujuan-${{ steps.meta.outputs.version }}-chrome.zip` 并解压
+            2. 打开 `chrome://extensions/`，开启「开发者模式」
+            3. 点「加载已解压的扩展程序」，选择解压后的目录
+
+            **Firefox**
+
+            1. 下载 `better-zujuan-${{ steps.meta.outputs.version }}-firefox.zip` 并解压
+            2. 打开 `about:debugging#/runtime/this-firefox`
+            3. 点「临时载入附加组件」，选择解压目录里的 `manifest.json`
+
+            `-sources.zip` 是 Firefox 审核所需的源码包，普通安装用不到。
+
+            ## 本次构建
+
+            - 提交：`${{ github.sha }}`
+            - 构建编号：`#${{ github.run_number }}`
+            - 质量门禁：`pnpm run check` 全部通过（类型检查、单元测试、产物自检）

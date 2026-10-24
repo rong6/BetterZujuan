@@ -1,0 +1,21 @@
+# 依赖与构建产物
+node_modules/
+.output/
+.wxt/
+
+# 本地环境
+.env
+.env.*
+*.local
+
+# 编辑器与系统
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log
+
+# 测试与临时文件
+coverage/
+*.tmp

@@ -1,0 +1,6 @@
+{
+  // WXT 生成的 tsconfig 已提供严格模式、@/* 别名与 #imports 声明，
+  // 这里只补充本项目需要额外纳入类型检查的目录/文件，不要覆盖 paths/include。
+  "extends": "./.wxt/tsconfig.json",
+  "include": ["src", "tests", "wxt.config.ts", "vitest.config.ts", ".wxt/wxt.d.ts"]
+}

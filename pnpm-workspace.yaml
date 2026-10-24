@@ -1,0 +1,6 @@
+# pnpm 11 起，构建设置迁移到本文件（package.json 的 pnpm 字段不再被读取）。
+# esbuild 需要运行其安装脚本来准备平台二进制，否则 WXT 打包会失败。
+allowBuilds:
+  esbuild: true
+minimumReleaseAgeExclude:
+  - docx@9.12.0
